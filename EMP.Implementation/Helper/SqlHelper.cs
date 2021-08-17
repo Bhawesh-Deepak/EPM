@@ -21,6 +21,7 @@ namespace EMP.Implementation.Helper
                     // type is only for OLE DB.  
                     cmd.CommandType = commandType;
                     cmd.Parameters.AddRange(parameters);
+                    
 
                     conn.Open();
                     return await cmd.ExecuteNonQueryAsync();

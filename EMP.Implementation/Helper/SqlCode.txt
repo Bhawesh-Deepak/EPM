@@ -1,0 +1,44 @@
+﻿Create Table Customer
+(
+	Id int Identity(1,1) Primary key Not null,
+	Name varchar(200) not null,
+	Email varchar(30),
+	Phone varchar(30),
+	IsActive bit default 1,
+	IsDeleted bit default 0,
+	CreatedBy int not null,
+	CreatedDate DateTime Default GetDate(),
+	UpdatedBy int ,
+	UpdatedDate DateTime
+)
+
+Create Table Employee
+(
+	Id int Identity(1,1) Primary key Not null,
+	Name varchar(200) not null,
+	Email varchar(30),
+	Phone varchar(30),
+	EmpCode Varchar(200),
+	IsActive bit default 1,
+	IsDeleted bit default 0,
+	CreatedBy int not null,
+	CreatedDate DateTime Default GetDate(),
+	UpdatedBy int ,
+	UpdatedDate DateTime
+)
+
+Create Table Product
+(
+	Id int Identity(1,1) Primary key Not null,
+	Name varchar(200) not null,
+	Price decimal(12,2) default 0,
+	ProductImage varchar(500),
+	Quantity int,
+	ProductVideo varchar(500),
+	IsActive bit default 1,
+	IsDeleted bit default 0,
+	CreatedBy int not null,
+	CreatedDate DateTime Default GetDate(),
+	UpdatedBy int ,
+	UpdatedDate DateTime
+)
