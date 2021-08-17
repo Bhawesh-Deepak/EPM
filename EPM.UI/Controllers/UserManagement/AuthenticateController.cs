@@ -1,5 +1,6 @@
 ﻿using EPM.Core.UserManagement;
 using EPM.Repository.UserManagement;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
@@ -25,7 +26,9 @@ namespace EPM.UI.Controllers.UserManagement
         public async Task<IActionResult> Login(Authenticate model) {
             var response = await _IAuthenticateRepository.IsAuthenticate(model);
             if (response) {
+                HttpContext.Session.SetString("Username", model.UserName);
                 return RedirectToAction("Index", "Home");
+                
             }
             else
                 return RedirectToAction("Index", "Authenticate");
