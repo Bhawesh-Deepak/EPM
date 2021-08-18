@@ -1,0 +1,125 @@
+From 25d7bfd89b4a04939acb2be6d01233208fd07bd9 Mon Sep 17 00:00:00 2001
+From: Bhawesh Deepak <Bhawesh Deepak@DESKTOP-KB2SSTK>
+Date: Tue, 17 Aug 2021 05:23:03 -0700
+Subject: [PATCH 2/3] Custom Authenticate
+
+---
+ EPM.UI/Controllers/HomeController.cs          |  4 ++-
+ .../UserManagement/AuthenticateController.cs  |  3 ++
+ EPM.UI/EPM.UI.csproj                          |  1 +
+ EPM.UI/Helper/CustomAuthenticate.cs           | 29 +++++++++++++++++++
+ EPM.UI/Startup.cs                             |  3 ++
+ 5 files changed, 39 insertions(+), 1 deletion(-)
+ create mode 100644 EPM.UI/Helper/CustomAuthenticate.cs
+
+diff --git a/EPM.UI/Controllers/HomeController.cs b/EPM.UI/Controllers/HomeController.cs
+index 2b9085f..6607516 100644
+--- a/EPM.UI/Controllers/HomeController.cs
++++ b/EPM.UI/Controllers/HomeController.cs
+@@ -1,4 +1,5 @@
+-﻿using EPM.UI.Models;
++﻿using EPM.UI.Helper;
++using EPM.UI.Models;
+ using Microsoft.AspNetCore.Mvc;
+ using Microsoft.Extensions.Logging;
+ using System;
+@@ -9,6 +10,7 @@ using System.Threading.Tasks;
+ 
+ namespace EPM.UI.Controllers
+ {
++    [CustomAuthenticate]
+     public class HomeController : Controller
+     {
+         private readonly ILogger<HomeController> _logger;
+diff --git a/EPM.UI/Controllers/UserManagement/AuthenticateController.cs b/EPM.UI/Controllers/UserManagement/AuthenticateController.cs
+index 724dbe7..13bf7b3 100644
+--- a/EPM.UI/Controllers/UserManagement/AuthenticateController.cs
++++ b/EPM.UI/Controllers/UserManagement/AuthenticateController.cs
+@@ -1,5 +1,6 @@
+ ﻿using EPM.Core.UserManagement;
+ using EPM.Repository.UserManagement;
++using Microsoft.AspNetCore.Http;
+ using Microsoft.AspNetCore.Mvc;
+ using System;
+ using System.Collections.Generic;
+@@ -25,7 +26,9 @@ namespace EPM.UI.Controllers.UserManagement
+         public async Task<IActionResult> Login(Authenticate model) {
+             var response = await _IAuthenticateRepository.IsAuthenticate(model);
+             if (response) {
++                HttpContext.Session.SetString("Username", model.UserName);
+                 return RedirectToAction("Index", "Home");
++                
+             }
+             else
+                 return RedirectToAction("Index", "Authenticate");
+diff --git a/EPM.UI/EPM.UI.csproj b/EPM.UI/EPM.UI.csproj
+index abdbf28..6b42f03 100644
+--- a/EPM.UI/EPM.UI.csproj
++++ b/EPM.UI/EPM.UI.csproj
+@@ -6,6 +6,7 @@
+   </PropertyGroup>
+ 
+   <ItemGroup>
++    <PackageReference Include="Microsoft.AspNet.Mvc" Version="5.2.7" />
+     <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="5.0.9" />
+   </ItemGroup>
+ 
+diff --git a/EPM.UI/Helper/CustomAuthenticate.cs b/EPM.UI/Helper/CustomAuthenticate.cs
+new file mode 100644
+index 0000000..bb66730
+--- /dev/null
++++ b/EPM.UI/Helper/CustomAuthenticate.cs
+@@ -0,0 +1,29 @@
++﻿using Microsoft.AspNetCore.Http;
++using Microsoft.AspNetCore.Http.Extensions;
++using Microsoft.AspNetCore.Mvc;
++using Microsoft.AspNetCore.Mvc.Filters;
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using System.Threading.Tasks;
++
++namespace EPM.UI.Helper
++{
++    public class CustomAuthenticate : TypeFilterAttribute
++    {
++        public CustomAuthenticate() : base(typeof(AuthenticateUser))
++        {
++
++        }
++        public class AuthenticateUser :IAuthorizationFilter
++        {
++            public void OnAuthorization(AuthorizationFilterContext context)
++            {
++                if (context.HttpContext.Session.GetString("Username") == null)
++                {
++                    context.Result = new RedirectToActionResult("Index", "Authenticate", null);  ;
++                }
++            }
++        }
++    }
++}
+diff --git a/EPM.UI/Startup.cs b/EPM.UI/Startup.cs
+index ebea7cf..5b91e0d 100644
+--- a/EPM.UI/Startup.cs
++++ b/EPM.UI/Startup.cs
+@@ -26,6 +26,7 @@ namespace EPM.UI
+         {
+             services.AddTransient<IAuthenticate, AuthenticateImplementation>();
+             services.AddControllersWithViews();
++            services.AddSession();
+         }
+ 
+         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
+@@ -39,6 +40,8 @@ namespace EPM.UI
+             {
+                 app.UseExceptionHandler("/Home/Error");
+             }
++
++            app.UseSession();
+             app.UseStaticFiles();
+ 
+             app.UseRouting();
+-- 
+2.31.1.windows.1
+

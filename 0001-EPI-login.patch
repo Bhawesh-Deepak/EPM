@@ -1,0 +1,584 @@
+From f1f5ba076691fee80cacd3f38730907d85d01fe0 Mon Sep 17 00:00:00 2001
+From: Bhawesh Deepak <Bhawesh Deepak@DESKTOP-KB2SSTK>
+Date: Tue, 17 Aug 2021 04:52:17 -0700
+Subject: [PATCH 1/3] EPI login
+
+---
+ EMP.Implementation/EMP.Implementation.csproj  |  5 ++
+ EMP.Implementation/Helper/SqlCode.txt         | 44 +++++++++
+ EMP.Implementation/Helper/SqlConstant.cs      |  4 +
+ EMP.Implementation/Helper/SqlHelper.cs        |  1 +
+ .../AuthenticateImplementation.cs             | 49 ++++++++++
+ EPM.Core/Base/BaseModel.cs                    | 18 ++++
+ EPM.Core/Class1.cs                            |  8 --
+ EPM.Core/UserManagement/Authenticate.cs       | 23 +++++
+ EPM.Repository/EPM.Repository.csproj          |  4 +
+ .../UserManagement/IAuthenticate.cs           | 15 ++++
+ .../UserManagement/AuthenticateController.cs  | 34 +++++++
+ .../UserManagement/UserDetailController.cs    | 32 +++++++
+ EPM.UI/EPM.UI.csproj                          |  5 ++
+ EPM.UI/Startup.cs                             |  7 +-
+ EPM.UI/Views/Shared/_Layout.cshtml            |  7 ++
+ EPM.UI/Views/UserManagement/CreateUser.cshtml | 35 ++++++++
+ EPM.UI/Views/UserManagement/Login.cshtml      | 90 +++++++++++++++++++
+ EPM.UI/appsettings.json                       |  3 +
+ 18 files changed, 375 insertions(+), 9 deletions(-)
+ create mode 100644 EMP.Implementation/Helper/SqlCode.txt
+ create mode 100644 EMP.Implementation/UserManagement/AuthenticateImplementation.cs
+ create mode 100644 EPM.Core/Base/BaseModel.cs
+ delete mode 100644 EPM.Core/Class1.cs
+ create mode 100644 EPM.Core/UserManagement/Authenticate.cs
+ create mode 100644 EPM.Repository/UserManagement/IAuthenticate.cs
+ create mode 100644 EPM.UI/Controllers/UserManagement/AuthenticateController.cs
+ create mode 100644 EPM.UI/Controllers/UserManagement/UserDetailController.cs
+ create mode 100644 EPM.UI/Views/UserManagement/CreateUser.cshtml
+ create mode 100644 EPM.UI/Views/UserManagement/Login.cshtml
+
+diff --git a/EMP.Implementation/EMP.Implementation.csproj b/EMP.Implementation/EMP.Implementation.csproj
+index 8bffb61..90c08fb 100644
+--- a/EMP.Implementation/EMP.Implementation.csproj
++++ b/EMP.Implementation/EMP.Implementation.csproj
+@@ -5,7 +5,12 @@
+   </PropertyGroup>
+ 
+   <ItemGroup>
++    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="5.0.0" />
+     <PackageReference Include="System.Data.SqlClient" Version="4.8.2" />
+   </ItemGroup>
+ 
++  <ItemGroup>
++    <ProjectReference Include="..\EPM.Repository\EPM.Repository.csproj" />
++  </ItemGroup>
++
+ </Project>
+diff --git a/EMP.Implementation/Helper/SqlCode.txt b/EMP.Implementation/Helper/SqlCode.txt
+new file mode 100644
+index 0000000..2d87ffd
+--- /dev/null
++++ b/EMP.Implementation/Helper/SqlCode.txt
+@@ -0,0 +1,44 @@
++﻿Create Table Customer
++(
++	Id int Identity(1,1) Primary key Not null,
++	Name varchar(200) not null,
++	Email varchar(30),
++	Phone varchar(30),
++	IsActive bit default 1,
++	IsDeleted bit default 0,
++	CreatedBy int not null,
++	CreatedDate DateTime Default GetDate(),
++	UpdatedBy int ,
++	UpdatedDate DateTime
++)
++
++Create Table Employee
++(
++	Id int Identity(1,1) Primary key Not null,
++	Name varchar(200) not null,
++	Email varchar(30),
++	Phone varchar(30),
++	EmpCode Varchar(200),
++	IsActive bit default 1,
++	IsDeleted bit default 0,
++	CreatedBy int not null,
++	CreatedDate DateTime Default GetDate(),
++	UpdatedBy int ,
++	UpdatedDate DateTime
++)
++
++Create Table Product
++(
++	Id int Identity(1,1) Primary key Not null,
++	Name varchar(200) not null,
++	Price decimal(12,2) default 0,
++	ProductImage varchar(500),
++	Quantity int,
++	ProductVideo varchar(500),
++	IsActive bit default 1,
++	IsDeleted bit default 0,
++	CreatedBy int not null,
++	CreatedDate DateTime Default GetDate(),
++	UpdatedBy int ,
++	UpdatedDate DateTime
++)
+\ No newline at end of file
+diff --git a/EMP.Implementation/Helper/SqlConstant.cs b/EMP.Implementation/Helper/SqlConstant.cs
+index 4108258..c4122a9 100644
+--- a/EMP.Implementation/Helper/SqlConstant.cs
++++ b/EMP.Implementation/Helper/SqlConstant.cs
+@@ -8,5 +8,9 @@ namespace EMP.Implementation.Helper
+ {
+     public static class SqlConstant
+     {
++        public static string CreateUser= @"Insert into Authenticat (UserName, Password,CreatedBy) values (@userName, @password,1);";
++        public static string IsAuthenticate = @"select COUNT(1) from Authenticat 
++                                                where UserName=@username and Password=@password
++                                                and IsActive=1 and IsDeleted=0";
+     }
+ }
+diff --git a/EMP.Implementation/Helper/SqlHelper.cs b/EMP.Implementation/Helper/SqlHelper.cs
+index 681fe2c..0975a0d 100644
+--- a/EMP.Implementation/Helper/SqlHelper.cs
++++ b/EMP.Implementation/Helper/SqlHelper.cs
+@@ -21,6 +21,7 @@ namespace EMP.Implementation.Helper
+                     // type is only for OLE DB.  
+                     cmd.CommandType = commandType;
+                     cmd.Parameters.AddRange(parameters);
++                    
+ 
+                     conn.Open();
+                     return await cmd.ExecuteNonQueryAsync();
+diff --git a/EMP.Implementation/UserManagement/AuthenticateImplementation.cs b/EMP.Implementation/UserManagement/AuthenticateImplementation.cs
+new file mode 100644
+index 0000000..e43ee6f
+--- /dev/null
++++ b/EMP.Implementation/UserManagement/AuthenticateImplementation.cs
+@@ -0,0 +1,49 @@
++﻿using EMP.Implementation.Helper;
++using EPM.Core.UserManagement;
++using EPM.Repository.UserManagement;
++using Microsoft.Extensions.Configuration;
++using System;
++using System.Collections.Generic;
++using System.Data.SqlClient;
++using System.Linq;
++using System.Text;
++using System.Threading.Tasks;
++
++namespace EMP.Implementation.UserManagement
++{
++    public class AuthenticateImplementation : IAuthenticate
++    {
++        private readonly string _connectionString;
++
++        public AuthenticateImplementation(IConfiguration configuration)
++        {
++            _connectionString = configuration.GetSection("ConnectionStrings:dbConnection").Value;
++        }
++        public async Task<bool> CreateUser(Authenticate model)
++        {
++            SqlParameter[] parameter = {
++                new SqlParameter("@userName",model.UserName),
++                new SqlParameter("@password",model.Password),
++            };
++
++
++            var response =await  SqlHelper.ExecuteNonQuery(_connectionString,
++                SqlConstant.CreateUser, System.Data.CommandType.Text, parameter);
++
++            return Convert.ToInt32(response) > 0;
++        }
++
++        public async Task<bool> IsAuthenticate(Authenticate model)
++        {
++            SqlParameter[] parameter = {
++                new SqlParameter("@userName",model.UserName),
++                new SqlParameter("@password",model.Password),
++            };
++
++            var response = await SqlHelper.ExecuteScalar(_connectionString,
++                SqlConstant.IsAuthenticate, System.Data.CommandType.Text, parameter);
++
++            return Convert.ToInt32(response) > 0;
++        }
++    }
++}
+diff --git a/EPM.Core/Base/BaseModel.cs b/EPM.Core/Base/BaseModel.cs
+new file mode 100644
+index 0000000..ce1e7d0
+--- /dev/null
++++ b/EPM.Core/Base/BaseModel.cs
+@@ -0,0 +1,18 @@
++﻿using System;
++using System.Collections.Generic;
++using System.Linq;
++using System.Text;
++using System.Threading.Tasks;
++
++namespace EPM.Core.Base
++{
++    //Common Property 
++    public abstract class BaseModel<T>
++    {
++        public T Id { get; set; }
++        public int CreatedBy { get; set; }
++        public DateTime CreateDate { get; set; }
++        public int UpdatedBy { get; set; }
++        public DateTime UpdatedDate { get; set; }
++    }
++}
+diff --git a/EPM.Core/Class1.cs b/EPM.Core/Class1.cs
+deleted file mode 100644
+index 89495f7..0000000
+--- a/EPM.Core/Class1.cs
++++ /dev/null
+@@ -1,8 +0,0 @@
+-﻿using System;
+-
+-namespace EPM.Core
+-{
+-    public class Class1
+-    {
+-    }
+-}
+diff --git a/EPM.Core/UserManagement/Authenticate.cs b/EPM.Core/UserManagement/Authenticate.cs
+new file mode 100644
+index 0000000..3d2e40d
+--- /dev/null
++++ b/EPM.Core/UserManagement/Authenticate.cs
+@@ -0,0 +1,23 @@
++﻿using EPM.Core.Base;
++using System.ComponentModel.DataAnnotations;
++
++namespace EPM.Core.UserManagement
++{
++    public class Authenticate: BaseModel<int>
++    {
++        [Required(ErrorMessage ="User name is required")]
++        [MaxLength(100,ErrorMessage ="User name is too large")]
++        [MinLength(5, ErrorMessage = "User name is too small")]
++        public string UserName { get; set; }
++
++        [Required(ErrorMessage ="Password is required.")]
++        [DataType(DataType.Password)]
++        public string Password { get; set; }
++
++
++        [Required(ErrorMessage = "Password is required.")]
++        [DataType(DataType.Password)]
++        [Compare("Password",ErrorMessage ="Password do not match")]
++        public string ConfirmPassword { get; set; }
++    }
++}
+diff --git a/EPM.Repository/EPM.Repository.csproj b/EPM.Repository/EPM.Repository.csproj
+index f208d30..e7c77ff 100644
+--- a/EPM.Repository/EPM.Repository.csproj
++++ b/EPM.Repository/EPM.Repository.csproj
+@@ -4,4 +4,8 @@
+     <TargetFramework>net5.0</TargetFramework>
+   </PropertyGroup>
+ 
++  <ItemGroup>
++    <ProjectReference Include="..\EPM.Core\EPM.Core.csproj" />
++  </ItemGroup>
++
+ </Project>
+diff --git a/EPM.Repository/UserManagement/IAuthenticate.cs b/EPM.Repository/UserManagement/IAuthenticate.cs
+new file mode 100644
+index 0000000..e1a61a9
+--- /dev/null
++++ b/EPM.Repository/UserManagement/IAuthenticate.cs
+@@ -0,0 +1,15 @@
++﻿using EPM.Core.UserManagement;
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using System.Text;
++using System.Threading.Tasks;
++
++namespace EPM.Repository.UserManagement
++{
++    public interface IAuthenticate
++    {
++        Task<bool> CreateUser(Authenticate model);
++        Task<bool> IsAuthenticate(Authenticate model);
++    }
++}
+diff --git a/EPM.UI/Controllers/UserManagement/AuthenticateController.cs b/EPM.UI/Controllers/UserManagement/AuthenticateController.cs
+new file mode 100644
+index 0000000..724dbe7
+--- /dev/null
++++ b/EPM.UI/Controllers/UserManagement/AuthenticateController.cs
+@@ -0,0 +1,34 @@
++﻿using EPM.Core.UserManagement;
++using EPM.Repository.UserManagement;
++using Microsoft.AspNetCore.Mvc;
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using System.Threading.Tasks;
++
++namespace EPM.UI.Controllers.UserManagement
++{
++    public class AuthenticateController : Controller
++    {
++        private readonly IAuthenticate _IAuthenticateRepository;
++
++        public AuthenticateController(IAuthenticate authenticateRepository) {
++            _IAuthenticateRepository = authenticateRepository;
++        }
++
++        public IActionResult Index()
++        {
++            return View("~/Views/UserManagement/Login.cshtml");
++        }
++
++        [HttpPost]
++        public async Task<IActionResult> Login(Authenticate model) {
++            var response = await _IAuthenticateRepository.IsAuthenticate(model);
++            if (response) {
++                return RedirectToAction("Index", "Home");
++            }
++            else
++                return RedirectToAction("Index", "Authenticate");
++        }
++    }
++}
+diff --git a/EPM.UI/Controllers/UserManagement/UserDetailController.cs b/EPM.UI/Controllers/UserManagement/UserDetailController.cs
+new file mode 100644
+index 0000000..f053a6b
+--- /dev/null
++++ b/EPM.UI/Controllers/UserManagement/UserDetailController.cs
+@@ -0,0 +1,32 @@
++﻿using EPM.Core.UserManagement;
++using EPM.Repository.UserManagement;
++using Microsoft.AspNetCore.Mvc;
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using System.Threading.Tasks;
++
++namespace EPM.UI.Controllers.UserManagement
++{
++    public class UserDetailController : Controller
++    {
++        private readonly IAuthenticate _IAuthenticateRepository;
++
++        public UserDetailController(IAuthenticate authenticateRepository)
++        {
++            _IAuthenticateRepository = authenticateRepository;
++        }
++        public IActionResult Index()
++        {
++            return View("~/Views/UserManagement/CreateUser.cshtml");
++        }
++
++        [HttpPost]
++        public async Task<IActionResult> CreateUser(Authenticate model)
++        {
++            var response = await _IAuthenticateRepository.CreateUser(model);
++            return Json(response);
++
++        }
++    }
++}
+diff --git a/EPM.UI/EPM.UI.csproj b/EPM.UI/EPM.UI.csproj
+index 510685b..abdbf28 100644
+--- a/EPM.UI/EPM.UI.csproj
++++ b/EPM.UI/EPM.UI.csproj
+@@ -9,4 +9,9 @@
+     <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="5.0.9" />
+   </ItemGroup>
+ 
++  <ItemGroup>
++    <ProjectReference Include="..\EMP.Implementation\EMP.Implementation.csproj" />
++    <ProjectReference Include="..\EPM.Repository\EPM.Repository.csproj" />
++  </ItemGroup>
++
+ </Project>
+diff --git a/EPM.UI/Startup.cs b/EPM.UI/Startup.cs
+index efb5f5b..ebea7cf 100644
+--- a/EPM.UI/Startup.cs
++++ b/EPM.UI/Startup.cs
+@@ -1,3 +1,5 @@
++using EMP.Implementation.UserManagement;
++using EPM.Repository.UserManagement;
+ using Microsoft.AspNetCore.Builder;
+ using Microsoft.AspNetCore.Hosting;
+ using Microsoft.Extensions.Configuration;
+@@ -22,6 +24,7 @@ namespace EPM.UI
+         // This method gets called by the runtime. Use this method to add services to the container.
+         public void ConfigureServices(IServiceCollection services)
+         {
++            services.AddTransient<IAuthenticate, AuthenticateImplementation>();
+             services.AddControllersWithViews();
+         }
+ 
+@@ -40,13 +43,15 @@ namespace EPM.UI
+ 
+             app.UseRouting();
+ 
++            app.UseAuthentication();
++
+             app.UseAuthorization();
+ 
+             app.UseEndpoints(endpoints =>
+             {
+                 endpoints.MapControllerRoute(
+                     name: "default",
+-                    pattern: "{controller=Home}/{action=Index}/{id?}");
++                    pattern: "{controller=Authenticate}/{action=Index}/{id?}");
+             });
+         }
+     }
+diff --git a/EPM.UI/Views/Shared/_Layout.cshtml b/EPM.UI/Views/Shared/_Layout.cshtml
+index 092d364..b72ac59 100644
+--- a/EPM.UI/Views/Shared/_Layout.cshtml
++++ b/EPM.UI/Views/Shared/_Layout.cshtml
+@@ -6,6 +6,13 @@
+     <title>@ViewData["Title"] - EPM.UI</title>
+     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+     <link rel="stylesheet" href="~/css/site.css" />
++    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
++    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
++    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
++
++    <script src="~/lib/jquery-validation/dist/jquery.validate.js"></script>
++    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.js"></script>
++
+ </head>
+ <body>
+     <header>
+diff --git a/EPM.UI/Views/UserManagement/CreateUser.cshtml b/EPM.UI/Views/UserManagement/CreateUser.cshtml
+new file mode 100644
+index 0000000..2f7525e
+--- /dev/null
++++ b/EPM.UI/Views/UserManagement/CreateUser.cshtml
+@@ -0,0 +1,35 @@
++﻿@model EPM.Core.UserManagement.Authenticate
++
++<div class="container">
++    <div class="panel">
++        <div class="panel-header">
++            Create User
++        </div>
++        <div class="panel-body">
++            <form asp-controller="UserDetail" asp-action="CreateUser">
++                <div class="col-md-12">
++                    <div class="form-group col-md-4">
++                        <label for="email">User Name:</label>
++                        <input class="form-control" asp-for="UserName">
++                        <span class="text-danger" asp-validation-for="UserName"></span>
++                    </div>
++                    <div class="form-group col-md-4">
++                        <label for="pwd">Password:</label>
++                        <input class="form-control" asp-for="Password">
++                        <span asp-validation-for="Password"></span>
++                    </div>
++                    <div class="form-group col-md-4">
++                        <label for="pwd">Confirm Password:</label>
++                        <input class="form-control" asp-for="ConfirmPassword">
++                        <span asp-validation-for="ConfirmPassword"></span>
++                    </div>
++                </div>
++                <div class="col-md-12">
++                    <button class="btn btn-primary float-right">Save</button>
++                </div>
++
++            </form>
++        </div>
++    </div>
++    
++</div>
+diff --git a/EPM.UI/Views/UserManagement/Login.cshtml b/EPM.UI/Views/UserManagement/Login.cshtml
+new file mode 100644
+index 0000000..cb7766f
+--- /dev/null
++++ b/EPM.UI/Views/UserManagement/Login.cshtml
+@@ -0,0 +1,90 @@
++﻿@{ Layout = null; }
++@model EPM.Core.UserManagement.Authenticate
++<html lang="en">
++<head>
++    <meta charset="UTF-8">
++    <title>
++        Bootstrap 4 Login Form Example
++    </title>
++    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
++    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
++    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
++
++    <script src="~/lib/jquery-validation/dist/jquery.validate.js"></script>
++    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.js"></script>
++</head>
++<style>
++    html {
++        height: 100%;
++    }
++
++    body {
++        height: 100%;
++    }
++
++    .global-container {
++        height: 100%;
++        display: flex;
++        align-items: center;
++        justify-content: center;
++        background-color: #f5f5f5;
++    }
++
++    form {
++        padding-top: 10px;
++        font-size: 14px;
++        margin-top: 30px;
++    }
++
++    .card-title {
++        font-weight: 300;
++    }
++
++    .btn {
++        font-size: 14px;
++        margin-top: 20px;
++    }
++
++    .login-form {
++        width: 330px;
++        margin: 20px;
++    }
++
++    .sign-up {
++        text-align: center;
++        padding: 20px 0 0;
++    }
++
++    .alert {
++        margin-bottom: -30px;
++        font-size: 13px;
++        margin-top: 20px;
++    }
++</style>
++<body>
++    <div class="pt-5">
++        <div class="global-container">
++            <div class="card login-form">
++                <div class="card-body">
++                    <h3 class="card-title text-center"> EPI Login </h3>
++                    <div class="card-text">
++                        <form asp-action="Login" asp-controller="Authenticate">
++                            <div class="form-group">
++                                <label for="exampleInputEmail1"> User name </label>
++                                <input class="form-control form-control-sm"
++                                       asp-for="UserName">
++                            </div>
++                            <div class="form-group">
++                                <label for="exampleInputPassword1">Enter Password </label>
++                                <input class="form-control form-control-sm" asp-for="Password">
++                            </div>
++                            <button type="submit" class="btn btn-primary btn-block"> Sign in </button>
++
++                        </form>
++                    </div>
++                </div>
++            </div>
++        </div>
++    </div>
++</body>
++</html>
+diff --git a/EPM.UI/appsettings.json b/EPM.UI/appsettings.json
+index d9d9a9b..99c49ac 100644
+--- a/EPM.UI/appsettings.json
++++ b/EPM.UI/appsettings.json
+@@ -6,5 +6,8 @@
+       "Microsoft.Hosting.Lifetime": "Information"
+     }
+   },
++  "ConnectionStrings": {
++    "dbConnection": "Server=DESKTOP-KB2SSTK;Database=OmnieTraining; User Id=sa;Password=vi@pra91"
++  },
+   "AllowedHosts": "*"
+ }
+-- 
+2.31.1.windows.1
+

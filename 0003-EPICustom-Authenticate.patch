@@ -1,0 +1,59 @@
+From da1febe9f50f6177b205b7becd3de1f4177ce7aa Mon Sep 17 00:00:00 2001
+From: Bhawesh Deepak <Bhawesh Deepak@DESKTOP-KB2SSTK>
+Date: Tue, 17 Aug 2021 20:34:32 -0700
+Subject: [PATCH 3/3] EPICustom Authenticate
+
+---
+ EPM.Core/Master/Product.cs | 18 ++++++++++++++++++
+ EPM.UI/EPM.UI.csproj       |  5 ++++-
+ 2 files changed, 22 insertions(+), 1 deletion(-)
+ create mode 100644 EPM.Core/Master/Product.cs
+
+diff --git a/EPM.Core/Master/Product.cs b/EPM.Core/Master/Product.cs
+new file mode 100644
+index 0000000..70cacdb
+--- /dev/null
++++ b/EPM.Core/Master/Product.cs
+@@ -0,0 +1,18 @@
++﻿using EPM.Core.Base;
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using System.Text;
++using System.Threading.Tasks;
++
++namespace EPM.Core.Master
++{
++    public class Product: BaseModel<int>
++    {
++        public string Name { get; set; }
++        public decimal Price { get; set; }
++        public int Quantity { get; set; }
++        public string ProductImage { get; set; }
++        public string VideoPath { get; set; }
++    }
++}
+diff --git a/EPM.UI/EPM.UI.csproj b/EPM.UI/EPM.UI.csproj
+index 6b42f03..e47abcd 100644
+--- a/EPM.UI/EPM.UI.csproj
++++ b/EPM.UI/EPM.UI.csproj
+@@ -6,7 +6,6 @@
+   </PropertyGroup>
+ 
+   <ItemGroup>
+-    <PackageReference Include="Microsoft.AspNet.Mvc" Version="5.2.7" />
+     <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="5.0.9" />
+   </ItemGroup>
+ 
+@@ -15,4 +14,8 @@
+     <ProjectReference Include="..\EPM.Repository\EPM.Repository.csproj" />
+   </ItemGroup>
+ 
++  <ItemGroup>
++    <Folder Include="ProductImage\" />
++  </ItemGroup>
++
+ </Project>
+-- 
+2.31.1.windows.1
+
